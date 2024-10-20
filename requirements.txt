@@ -1,7 +1,11 @@
 pandas
 numpy
 scikit-learn
+scikit-optimize
 imbalanced-learn
 torch
 matplotlib
 streamlit
+lightgbm
+xgboost
+optuna

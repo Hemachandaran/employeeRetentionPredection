@@ -1,121 +1,78 @@
-import pandas as pd
+import streamlit as st
+import pickle
+import torch
+import torch.nn as nn
+import numpy as np
 
-class Preprocessing:
-    def __init__(self, df):
-        self.df = df
-        self.target_mean_feature=[]
+# Load the pickled model and vectorizer
+with open('text_model.pkl', 'rb') as model_file:
+    model_weights = pickle.load(model_file)
 
-    def handle_nulls(self):
-        """Fill null values in specific columns."""
-        self.df["enrolled_university"] = self.df["enrolled_university"].fillna("none")
-        self.df["education_level"] = self.df["education_level"].fillna("Other")
-        mode = self.df["experience"].mode()
-        self.df["experience"] = self.df["experience"].fillna(mode[0])
-        self.df["last_new_job"] = self.df["last_new_job"].fillna("Not Specified")
-        self.df['major_discipline'] = self.df['major_discipline'].fillna("Not Specified")
-        self.df["gender"] = self.df["gender"].fillna("Not Specified")
-        self.df["company_size"] = self.df["company_size"].fillna("Not Specified")
-        self.df["company_type"] = self.df["company_type"].fillna("Not Specified")
+with open('vectorizer_text.pkl', 'rb') as vectorizer_file:
+    loaded_vectorizer = pickle.load(vectorizer_file)
 
-    def encode_features(self):
-        """Encode categorical features with target mean."""
-        features = ['gender', "enrolled_university", "major_discipline",
-                    "education_level", "company_type", "city"]
+# Define the neural network class (same as in your training script)
+class SimpleNN(nn.Module):
+    def __init__(self, input_dim):
+        super(SimpleNN, self).__init__()
+        self.fc1 = nn.Linear(input_dim, 128)
+        self.dropout1 = nn.Dropout(0.5)
+        self.fc2 = nn.Linear(128, 64)
+        self.dropout2 = nn.Dropout(0.5)
+        self.fc3 = nn.Linear(64, 2)  # Output layer for binary classification
 
-        for i,feature in enumerate(features):
-            self.target_mean_feature.append(self.df.groupby(feature)['target'].mean())
-            self.df[feature] = self.df[feature].map(target_mean_feature[i])
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = self.dropout1(x)
+        x = torch.relu(self.fc2(x))
+        x = self.dropout2(x)
+        x = self.fc3(x)
+        return x
 
-        """Map relevant experience to binary values."""
-        self.df["relevent_experience"] = self.df["relevent_experience"].map({
-            'Has relevent experience': 1,
-            'No relevent experience': 0
-        })
+# Initialize the model
+input_dim = 5000  # Adjust this based on your TF-IDF features
+model = SimpleNN(input_dim=input_dim)
+model.load_state_dict(model_weights)
+model.eval()
 
-        """Map company size categories to numerical values."""
-        size_mapping = {
-            'Not Specified': 1,
-            '<10': 2,
-            '10/49': 3,
-            '50-99': 4,
-            '100-500': 5,
-            '500-999': 6,
-            '1000-4999': 7,
-            '5000-9999': 8,
-            '10000+': 9
-        }
+# Function to classify new sentences based on combined features
+def classify_features(features):
+    features_tfidf = loaded_vectorizer.transform([features]).toarray()
+    features_tensor = torch.FloatTensor(features_tfidf)
 
-        self.df["company_size"] = self.df["company_size"].replace(size_mapping)
+    with torch.no_grad():
+        output = model(features_tensor)
+        _, predicted_class = torch.max(output.data, 1)
 
-        """Map last new job categories to numerical values."""
-        last_new_job_mapping = {
-            'Not Specified': 0,
-            '<1': 1,
-            '1': 2,
-            '2': 3,
-            '3': 4,
-            '4': 5,
-            '5': 6,
-            '6': 7,
-            '7': 8,
-            '8': 9,
-            '9': 10,
-            '10': 11,
-            '11': 12,
-            '12': 13,
-            '13': 14,
-            '14': 15,
-            '15': 16,
-            '16': 17,
-            '17': 18,
-            '18': 19,
-            '19': 20,
-            '>20': 21
-        }
+    return predicted_class.item()
 
-        unique_jobs = sorted(self.df["last_new_job"].unique().tolist())
+# Streamlit UI
+st.title("Job Candidate Classification")
+st.write("Enter candidate details below:")
 
-        # Map last new job based on unique values
-        for i in unique_jobs:
-            if i in last_new_job_mapping:
-                self.df["last_new_job"] = self.df["last_new_job"].replace(i, last_new_job_mapping[i])
+# Input fields for user to fill in
+city = st.text_input("City")
+gender = st.selectbox("Gender", ["Male", "Female", "Other"])
+relevent_experience = st.selectbox("Relevant Experience", ["Yes", "No"])
+enrolled_university = st.selectbox("Enrolled University", ["No Enrollment", "Part-time", "Full-time"])
+education_level = st.selectbox("Education Level", ["High School", "Bachelor's", "Master's", "PhD"])
+major_discipline = st.selectbox("Major Discipline", ["STEM", "Business", "Arts", "Humanities"])
+experience = st.text_input("Experience (in years)")
+company_size = st.selectbox("Company Size", ["Small (<10)", "Medium (10-50)", "Large (>50)"])
+company_type = st.selectbox("Company Type", ["Private", "Public"])
+last_new_job = st.text_input("Last New Job (in years)")
+training_hours = st.number_input("Training Hours")
 
-        """Map experience categories to numerical values."""
-        experience_mapping = {
-            '>20': 21,
-            '<1': 0,
-            '1': 1,
-            '2': 2,
-            '3': 3,
-            '4': 4,
-            '5': 5,
-            '6': 6,
-            '7': 7,
-            '8': 8,
-            '9': 9,
-            '10': 10,
-            '11': 11,
-            '12': 12,
-            '13': 13,
-            '14': 14,
-            '15': 15,
-            '16': 16,
-            '17': 17,
-            '18': 18,
-            '19': 19,
-            '20': 20
-        }
+# Button to classify
+if st.button("Classify"):
+    # Prepare combined features string
+    combined_features = f"{city} {gender} {relevent_experience} {enrolled_university} {education_level} {major_discipline} {experience} {company_size} {company_type} {last_new_job} {training_hours}"
+    
+    # Classify the input features
+    prediction = classify_features(combined_features)
 
-        self.df["experience"] = self.df["experience"].map(experience_mapping)
-
-    def preprocess(self):
-        """Run all preprocessing steps."""
-        self.handle_nulls()
-        self.encode_features()
-
-
-# Example usage:
-# df = pd.read_csv('your_data.csv')
-# preprocessor = Preprocessing(df)
-# preprocessor.preprocess()
-# processed_df = preprocessor.df
+    # Display result
+    if prediction == 0:
+        st.success("The candidate is likely to be hired.")
+    else:
+        st.error("The candidate is unlikely to be hired.")

@@ -9,19 +9,22 @@ import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 
+
+
+
 def text_model(data: pd.DataFrame, target_feature: str, num_epochs: int = 10):
     # Prepare the features by concatenating relevant columns into a single string
     data['combined_features'] = (
-        data['city'].fillna('') + ' ' +
-        data['gender'].fillna('') + ' ' +
-        data['relevent_experience'].fillna('') + ' ' +
-        data['enrolled_university'].fillna('') + ' ' +
-        data['education_level'].fillna('') + ' ' +
-        data['major_discipline'].fillna('') + ' ' +
-        data['experience'].fillna('') + ' ' +
-        data['company_size'].fillna('') + ' ' +
-        data['company_type'].fillna('') + ' ' +
-        data['last_new_job'].fillna('') + ' ' +
+        data['city'].astype(str).fillna('') + ' ' +
+        data['gender'].astype(str).fillna('') + ' ' +
+        data['relevent_experience'].astype(str).fillna('') + ' ' +
+        data['enrolled_university'].astype(str).fillna('') + ' ' +
+        data['education_level'].astype(str).fillna('') + ' ' +
+        data['major_discipline'].astype(str).fillna('') + ' ' +
+        data['experience'].astype(str).fillna('') + ' ' +
+        data['company_size'].astype(str).fillna('') + ' ' +
+        data['company_type'].astype(str).fillna('') + ' ' +
+        data['last_new_job'].astype(str).fillna('') + ' ' +
         data['training_hours'].astype(str).fillna('')
     )
 

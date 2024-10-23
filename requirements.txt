@@ -9,3 +9,4 @@ streamlit
 lightgbm
 xgboost
 optuna
+scipy

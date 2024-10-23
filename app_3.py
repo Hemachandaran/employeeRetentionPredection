@@ -1,179 +1,95 @@
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix, ConfusionMatrixDisplay, classification_report
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import matplotlib.pyplot as plt
-from imblearn.over_sampling import SMOTENC
 import streamlit as st
+import joblib
+import pandas as pd
+from preprocessing import Preprocessing
 
-class Preprocessing:
-    # [Include the entire Preprocessing class here]
+# Load the model
+model = joblib.load('lightgbm_model.pkl')
 
-# Load your dataset from the CSV file and preprocess it.
-data_path = "aug_train.csv"  # Update this path if necessary.
-data = pd.read_csv(data_path)
+# Function to encode categorical variables if needed
+def encode_input_data(input_data):
+    df = pd.DataFrame(input_data, columns=[
+        'enrollee_id', 'city', 'city_development_index', 'gender',
+        'relevent_experience', 'enrolled_university', 'education_level',
+        'major_discipline', 'experience', 'company_size',
+        'company_type', 'last_new_job', 'training_hours'
+    ])
 
-# Create an instance of the Preprocessing class and run preprocessing.
-preprocessor = Preprocessing(data)
-processed_df = preprocessor.preprocess()
-
-# Prepare features and target variable for modeling.
-X_combined_features = processed_df.drop(columns=['target'])  
-y_encoded_target = processed_df['target']
-
-# Convert combined features into TF-IDF format (if necessary).
-X_combined_features['combined_features'] = (
-    X_combined_features['city'].astype(str) + ' ' +
-    X_combined_features['gender'].astype(str) + ' ' +
-    X_combined_features['relevent_experience'].astype(str) + ' '
-    # Add other relevant columns as needed...
-)
-
-# Define features and target variable again after preprocessing if necessary.
-X_final_features = X_combined_features['combined_features']
-y_final_target = LabelEncoder().fit_transform(y_encoded_target)
-
-# Split the dataset into training and testing sets.
-X_train_final, X_test_final, y_train_final, y_test_final = train_test_split(X_final_features, y_final_target, test_size=0.2, random_state=42)
-
-# Convert text to TF-IDF features.
-vectorizer = TfidfVectorizer(max_features=5000)
-X_train_tfidf_final = vectorizer.fit_transform(X_train_final).toarray()
-X_test_tfidf_final = vectorizer.transform(X_test_final).toarray()
-
-# Convert to PyTorch tensors.
-X_train_tensor_final = torch.FloatTensor(X_train_tfidf_final)
-X_test_tensor_final = torch.FloatTensor(X_test_tfidf_final)
-y_train_tensor_final = torch.LongTensor(y_train_final)
-y_test_tensor_final = torch.LongTensor(y_test_final)
-
-# Define the neural network model with Batch Normalization.
-class SimpleNN(nn.Module):
-    def __init__(self, input_dim):
-        super(SimpleNN, self).__init__()
-        self.fc1 = nn.Linear(input_dim, 128)
-        self.bn1 = nn.BatchNorm1d(128)  
-        self.dropout1 = nn.Dropout(0.5)
-        
-    def forward(self,x):
-      x=torch.relu(self.bn1(self.fc1(x)))
-      x=self.dropout1(x)
-      return x
-
-# Initialize the model.
-model=SimpleNN(input_dim=X_train_tfidf_final.shape[1])
-criterion=nn.CrossEntropyLoss()
-optimizer=optim.Adam(model.parameters(), lr=0.001)
-
-# Training the model with more epochs.
-num_epochs=40  
-for epoch in range(num_epochs):
-    model.train()
-    optimizer.zero_grad()
+    pr = Preprocessing(df)
+    in_df = pr.handle_nulls()
+    in_df = pr.encode_features()
     
-    outputs=model(X_train_tensor_final)
+    # One-hot encode categorical variables
+    df_encoded = pd.get_dummies(in_df)
     
-    loss=criterion(outputs,y_train_tensor_final)
-    loss.backward()
-    
-    optimizer.step()
-    
-    if (epoch + 1) % 5 == 0:
-      print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
+    return df_encoded.values
 
-# Evaluate the model's accuracy on the training set.
-model.eval()
-with torch.no_grad():
-    train_outputs=model(X_train_tensor_final)
-    _, train_predicted_classes=torch.max(train_outputs.data ,1)
+# User inputs
+st.title("Employee Retention Prediction")
 
-train_accuracy=accuracy_score(y_train_tensor_final.numpy(), train_predicted_classes.numpy())
-print(f'Training Accuracy: {train_accuracy:.2f}')
+enrollee_id = st.number_input("Enrollee ID", min_value=1)
+city = st.selectbox("Select City", [
+    'city_103', 'city_40', 'city_21', 'city_115', 'city_162',
+    'city_176', 'city_160', 'city_46', 'city_61', 'city_114',
+    'city_13', 'city_159', 'city_102', 'city_67', 'city_100',
+    'city_16', 'city_71', 'city_104', 'city_64', 'city_101',
+    'city_83', 'city_105', 'city_73', 'city_75', 'city_41',
+    'city_11', 'city_93', 'city_90', 'city_36', 'city_20',
+    'city_57', 'city_152', 'city_19', 'city_65', 'city_74',
+    'city_173', 'city_136', 'city_98', 'city_97', 'city_50',
+    'city_138', 'city_82', 'city_157', 'city_89','city_150',
+    # Add remaining cities...
+])
+city_development_index = st.number_input("City Development Index", min_value=0.0, max_value=1.0, step=0.01)
+gender = st.selectbox("Select Gender", ['Male', 'Not_specified', 'Female', 'Other'])
+relevant_experience = st.selectbox("Relevant Experience", ['Has relevant experience', 'No relevant experience'])
+enrolled_university = st.selectbox("Enrolled University", ['no_enrollment', 
+                                                             'Full time course',
+                                                             'none',
+                                                             'Part time course'])
+education_level = st.selectbox("Education Level", ['Graduate', 
+                                                    'Masters',
+                                                    'High School',
+                                                    'Other',
+                                                    "PhD",
+                                                    "Primary School"])
+major_discipline = st.selectbox("Major Discipline", ['STEM','Business Degree',
+                                                      "Not_Specified",
+                                                      "Arts",
+                                                      "Humanities",
+                                                      "No Major",
+                                                      "Other"])
+experience = st.selectbox("Years of Experience", ['>20','15','5','<1','11','13','7',
+                                                    '17','2','16','1','4','10','14',
+                                                    "18","19","12","3","6","9","8","20"])
+company_size = st.selectbox("Company Size", ['NS','50-99','<10','10000+',
+                                               "5000-9999","1000-4999",
+                                               "10/49","100-500","500-999"])
+company_type = st.selectbox("Company Type", ['not_specified','Pvt Ltd',
+                                               "Funded Startup",
+                                               "Early Stage Startup",
+                                               "Other",
+                                               "Public Sector",
+                                               "NGO"])
+last_new_job = st.selectbox("Last New Job Duration", ['1','>4','never','4','3','2','Not Specified'])
+training_hours = st.number_input("Training Hours", min_value=0)
 
-# Evaluate the model's accuracy on the test set.
-with torch.no_grad():
-    test_outputs=model(X_test_tensor_final)
-    _, predicted_classes=torch.max(test_outputs.data ,1)
-
-test_accuracy=accuracy_score(y_test_tensor_final.numpy(), predicted_classes.numpy())
-roc_auc=roc_auc_score(y_test_tensor_final.numpy(),torch.softmax(test_outputs ,dim=1)[:,1].numpy())
-conf_matrix=confusion_matrix(y_test_tensor_final.numpy(),predicted_classes.numpy())
-
-print(f'Test Accuracy: {test_accuracy:.2f}')
-print(f'ROC-AUC: {roc_auc:.2f}')
-
-# Display confusion matrix.
-ConfusionMatrixDisplay(confusion_matrix=conf_matrix).plot(cmap=plt.cm.Blues)
-plt.title("Confusion Matrix")
-plt.show()
-
-# Classification report for test set.
-print("Classification Report:")
-print(classification_report(y_test_tensor_final.numpy(),predicted_classes.numpy()))
-
-# Function to classify new sentences based on combined features.
-def classify_features(features):
-    features_tfidf=vectorizer.transform([features]).toarray()
-    features_tensor=torch.FloatTensor(features_tfidf)
-    
-    with torch.no_grad():
-      output=model(features_tensor)
-      _, predicted_class=torch.max(output.data ,1)
-      
-    return predicted_class.item()
-
-# Streamlit UI for prediction input
-st.title('Job Change Prediction')
-st.write('Choose input method:')
-input_method = st.radio("Select Input Method:", ('Professional Summary', 'Manual Input'))
-
-if input_method == 'Professional Summary':
-    st.subheader('Professional Summary')
-    summary_input = st.text_area("Edit your professional summary here:", 
-                                  "A seasoned professional with over 20 years of experience in the STEM field...")
-else:
-    st.subheader('Manual Input')
-    
-    city_input = st.selectbox('City:', options=['city_103', 'city_40', 'city_21', 'city_115'])  # Add all city options here
-    gender_input = st.selectbox('Gender:', options=['Male', 'Female', 'Other'])
-    relevant_experience_input = st.selectbox('Relevant Experience:', options=['Has relevent experience', 'No relevent experience'])
-    enrolled_university_input = st.selectbox('Enrolled University:', options=['no_enrollment', 'Full time course', 'Part time course'])
-    education_level_input = st.selectbox('Education Level:', options=['Graduate', 'Masters', 'High School'])
-    major_discipline_input = st.selectbox('Major Discipline:', options=['STEM', 'Humanities', 'Business Degree'])
-    
-    experience_input=st.text_input('Experience (in years):')
-    
-    company_size_input=st.selectbox('Company Size:', options=['<10', '10/49', '50-99', '100-500'])
-    
-    company_type_input=st.selectbox('Company Type:', options=['Pvt Ltd', 'Funded Startup', 'Public Sector'])
-    
-    last_new_job_input=st.selectbox('Last New Job:', options=['Not Specified', '<1 year', '>4 years'])
-    
-    training_hours_input=st.number_input('Training Hours:', min_value=0)
-
+# Button to make prediction
 if st.button('Predict'):
-    if input_method == 'Professional Summary':
-        new_features = summary_input
-        if new_features.strip() == "":
-            st.warning("Please enter a valid professional summary.")
-        else:
-            prediction_result = classify_features(new_features)
-            if prediction_result == 1:
-                st.success('The model predicts that you are looking for a job change.')
-            else:
-                st.success('The model predicts that you are not looking for a job change.')
-                
-    else:
-        new_features=f"{city_input} {gender_input} {relevant_experience_input} {enrolled_university_input} {education_level_input} {major_discipline_input} {experience_input} {company_size_input} {company_type_input} {last_new_job_input} {training_hours_input}"
-        
-        prediction_result = classify_features(new_features)
-        
-        if prediction_result == 1:
-            st.success('The model predicts that you are looking for a job change.')
-        else:
-            st.success('The model predicts that you are not looking for a job change.')
+    # Prepare input data for prediction
+    input_data = [[
+        enrollee_id, city, city_development_index, gender,
+        relevant_experience, enrolled_university, education_level,
+        major_discipline, experience, company_size,
+        company_type, last_new_job, training_hours
+    ]]
+    
+    # Encode input data
+    encoded_input = encode_input_data(input_data)
+
+    # Make prediction
+    try:
+        prediction = model.predict(encoded_input)
+        st.write(f"The predicted class is: {prediction[0]}")
+    except Exception as e:
+        st.write(f"Error during prediction: {e}")

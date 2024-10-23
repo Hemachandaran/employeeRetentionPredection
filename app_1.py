@@ -30,7 +30,7 @@ class SimpleNN(nn.Module):
         return x
 
 # Initialize the model
-input_dim = 5000  # Adjust this based on your TF-IDF features
+input_dim = 472    # Adjust this based on your TF-IDF features
 model = SimpleNN(input_dim=input_dim)
 model.load_state_dict(model_weights)
 model.eval()

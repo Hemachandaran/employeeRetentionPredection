@@ -1,5 +1,6 @@
 from imblearn.over_sampling import SMOTENC
 import pandas as pd
+import numpy as np
 
 class Preprocessing:
     def __init__(self, df):
@@ -10,25 +11,22 @@ class Preprocessing:
         self.target_mean_feature = []
         self.categorical_features_indices = []
 
-
-
-
     def handle_nulls(self):
-      """Fill null values in specific columns."""
-      self.df["enrolled_university"] = self.df["enrolled_university"].fillna("none")
-      self.df["education_level"] = self.df["education_level"].fillna("Other")
+        """Fill null values in specific columns."""
+        self.df["enrolled_university"] = self.df["enrolled_university"].fillna("none")
+        self.df["education_level"] = self.df["education_level"].fillna("Other")
 
-      # Fill nulls in 'experience' with mode and ensure it's treated as numeric
-      mode = self.df["experience"].mode()[0]
-      self.df["experience"] = self.df["experience"].fillna(mode)  # Ensure it's float
+        # Fill nulls in 'experience' with mode and ensure it's treated as numeric
+        mode = self.df["experience"].mode()[0]
+        self.df["experience"] = self.df["experience"].fillna(mode)  # Ensure it's float
 
-      self.df["last_new_job"] = self.df["last_new_job"].fillna("Not Specified")
-      self.df['major_discipline'] = self.df['major_discipline'].fillna("Not_Specified")
-      self.df["gender"] = self.df["gender"].fillna("Not_specified")
-      self.df["company_size"] = self.df["company_size"].fillna("NS")
-      self.df["company_type"] = self.df["company_type"].fillna("not_specified")
-      self.imputed_df = self.df
-      return self.df
+        self.df["last_new_job"] = self.df["last_new_job"].fillna("Not Specified")
+        self.df['major_discipline'] = self.df['major_discipline'].fillna("Not_Specified")
+        self.df["gender"] = self.df["gender"].fillna("Not_specified")
+        self.df["company_size"] = self.df["company_size"].fillna("NS")
+        self.df["company_type"] = self.df["company_type"].fillna("not_specified")
+        self.imputed_df = self.df
+        return self.df
 
     def encode_features(self):
         # Encode categorical features with target mean.
@@ -51,8 +49,7 @@ class Preprocessing:
         # Map last new job categories to numerical values.
 
         u=self.df["last_new_job"].unique().tolist()
-        u.sort()
-        un=[2,3,4,5,6,0,1]
+        un=[2,6,0,5,4,3,1]
 
         for i,j in zip(u,un):
           self.df["last_new_job"]=self.df["last_new_job"].replace(i,j)
@@ -71,7 +68,40 @@ class Preprocessing:
         self.featureEncoded_df = self.df
         return self.df
 
-    def balance_data(self):
+
+
+    def handle_outliers(self, features):
+        """Handle outliers by capping them for specified features."""
+        for feature in features:
+            Q1 = self.df[feature].quantile(0.25)
+            Q3 = self.df[feature].quantile(0.75)
+            IQR = Q3 - Q1
+            
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+            
+            # Cap the outliers
+            self.df[feature] = np.where(self.df[feature] > upper_bound, upper_bound,
+                                         np.where(self.df[feature] < lower_bound, lower_bound, 
+                                                  self.df[feature]))
+        
+        print("Outliers have been capped.")
+        
+        return self.df   # Return the modified DataFrame
+
+    def handle_skewness(self, features):
+        """Handle skewness using log transformation if necessary."""
+        for feature in features:
+            skewness_value = self.df[feature].skew()
+            if skewness_value > 0.5:  
+                # Apply log transformation to reduce skewness
+                self.df[feature] = np.log(self.df[feature] + 1)  
+        
+        print("Skewness has been handled using log transformation where applicable.")
+        
+        return self.df   # Return the modified DataFrame
+
+    def handle_imbalance(self):
         """Balance the dataset using SMOTENC."""
         X = self.df.drop("target", axis=1)
         y = self.df["target"]
@@ -94,9 +124,15 @@ class Preprocessing:
         return self.balance_df
 
     def preprocess(self):
-        """Run all preprocessing steps."""
-        self.inputed_df = self.handle_nulls()
-        self.balance_df = self.balance_data()
-        self.featureEncoded_df = self.encode_features()
-        return self.df
-
+        """Run all preprocessing steps."""       
+        
+        self.handle_nulls()
+        self.handle_imbalance()
+        self.encode_features()
+        # Handle outliers and skewness
+        self.handle_outliers(['training_hours', 'last_new_job', 'city_development_index'])
+        # self.handle_skewness(feature_list)
+        
+        
+        
+        return self.df   # Return processed DataFrame after encoding and balancing

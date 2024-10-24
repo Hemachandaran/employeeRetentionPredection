@@ -32,11 +32,24 @@ class Preprocessing:
         # Encode categorical features with target mean.
         features = ['gender', "enrolled_university", "major_discipline",
                     "education_level", "company_type", "city"]
+        
 
-        for i, feature in enumerate(features):
-            self.target_mean_feature.append(self.df.groupby(feature)['target'].mean())
-            self.df[feature] = self.df[feature].map(self.target_mean_feature[i])
+        i=0
+        for  feature in (features):
+            if "target" in self.df.columns:
+                # Use target mean from the DataFrame if available
+                self.target_mean_feature.append(self.df.groupby(feature)['target'].mean())
+                self.df[feature] = self.df[feature].map(self.target_mean_feature[i])
+                i+=1
+            else:
+                # Use previously stored target means if "target" is not present
+                self.df[feature] = self.df[feature].map(self.target_mean_feature[i])
+                i+=1
 
+        rel_exp = {'Has relevent experience': 1, 'No relevent experience': 0}
+        
+        # Map relevant experience to binary values.
+        self.df["relevent_experience"] = self.df["relevent_experience"].map(rel_exp)
         rel_exp={'Has relevent experience':1,'No relevent experience':0}
         # Map relevant experience to binary values.
         self.df["relevent_experience"] = self.df["relevent_experience"].map(rel_exp)
@@ -52,21 +65,21 @@ class Preprocessing:
         un=[2,6,0,5,4,3,1]
 
         for i,j in zip(u,un):
-          self.df["last_new_job"]=self.df["last_new_job"].replace(i,j)
+            self.df["last_new_job"]=self.df["last_new_job"].replace(i,j)
 
 
         # Map experience categories to numerical values.
 
         experience_mapping = {'<1': 0,'1': 1,'2': 2,'3': 3,'4': 4,\
-                              '5': 5,'6': 6,'7': 7,'8': 8,'9': 9,\
-                              '10': 10,'11': 11,'12': 12,'13': 13,\
-                              '14': 14,'15': 15,'16': 16,'17': 17,\
-                              '18': 18,'19': 19,'20': 20,'>20': 21,}
+                                '5': 5,'6': 6,'7': 7,'8': 8,'9': 9,\
+                                '10': 10,'11': 11,'12': 12,'13': 13,\
+                                '14': 14,'15': 15,'16': 16,'17': 17,\
+                                '18': 18,'19': 19,'20': 20,'>20': 21,}
         for i,j in zip(experience_mapping.keys(),experience_mapping.values()):
-          self.df["experience"]=self.df["experience"].replace(i,j)
+            self.df["experience"]=self.df["experience"].replace(i,j)
 
-        self.featureEncoded_df = self.df
-        return self.df
+            self.featureEncoded_df = self.df
+            return self.df
 
 
 
@@ -127,7 +140,8 @@ class Preprocessing:
         """Run all preprocessing steps."""       
         
         self.handle_nulls()
-        self.handle_imbalance()
+        if ("target" in self.df.columns):
+            self.handle_imbalance()
         self.encode_features()
         # Handle outliers and skewness
         self.handle_outliers(['training_hours', 'last_new_job', 'city_development_index'])

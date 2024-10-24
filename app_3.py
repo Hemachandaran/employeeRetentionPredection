@@ -1,7 +1,7 @@
 import streamlit as st
 import joblib
 import pandas as pd
-from preprocessing import Preprocessing
+from pre_processing import Preprocessing
 
 # Load the model
 model = joblib.load('lightgbm_model.pkl')
